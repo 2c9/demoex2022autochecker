@@ -54,34 +54,61 @@ Connect-VIServer -Server $vcsa
 $CLI = Get-VM -Name "TF-CLI-0"
 $vmscript = Get-Content -Path .\CLI.ps1 -Raw | compress | payload -Win
 $out = Invoke-VMScript -VM $CLI -ScriptText $vmscript -GuestUser 'user' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell
-$out.ScriptOutput | ConvertFrom-Json
+$CLI_OUT = $out.ScriptOutput | ConvertFrom-Json
 
 ##################
 
 $SRV = Get-VM -Name "TF-SRV-0"
 $vmscript = Get-Content -Path .\SRV.ps1 -Raw | compress | payload -Win
 $out = Invoke-VMScript -VM $SRV -ScriptText $vmscript -GuestUser 'Administrator' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell
-$out.ScriptOutput | ConvertFrom-Json
+$SRV_OUT = $out.ScriptOutput | ConvertFrom-Json
 
 ##################
 
 $ISP = Get-VM -Name "TF-ISP-0"
 $vmscript = Get-Content -Path .\ISP.yaml -Raw | compress | payload -Linux
 $out = Invoke-VMScript -VM $ISP -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash
-$out.ScriptOutput | ConvertFrom-Json
+$ISP_OUT = $out.ScriptOutput | ConvertFrom-Json
 
 ###################
 
 $WEBL = Get-VM -Name "TF-WEB-L-0"
 $vmscript = Get-Content -Path .\WEBL.yaml -Raw | compress | payload -Linux
 $out = Invoke-VMScript -VM $WEBL -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash
-$out.ScriptOutput | ConvertFrom-Json
+$WEBL_OUT = $out.ScriptOutput | ConvertFrom-Json
 
 ###################
 
 $WEBR = Get-VM -Name "TF-WEB-R-0"
 $vmscript = Get-Content -Path .\WEBR.yaml -Raw | compress | payload -Linux
 $out = Invoke-VMScript -VM $WEBR -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash
-$out.ScriptOutput | ConvertFrom-Json
+$WEBR_OUT = $out.ScriptOutput | ConvertFrom-Json
+
+#####################################
+
+$CLI_OUT
+$SRV_OUT
+$ISP_OUT
+$WEBL_OUT
+$WEBR_OUT
+
+$result = @(
+    [pscustomobject]@{
+        "Name" = "CLI: Basic configuration"; "Max" = 0.3; "Mark" = if($CLI.hostname -and $CLI.netconf){ 0.3 }else{0}
+    },
+    [pscustomobject]@{
+        "Name" = "SRV: Basic configuration"; "Max" = 0.3; "Mark" = if($SRV.hostname -and $SRV.netconf){ 0.3 }else{0}
+    },
+    [pscustomobject]@{
+        "Name" = "ISP: Basic configuration"; "Max" = 0.3; "Mark" = if($ISP.hostname -and $ISP.ens192 -and $ISP.ens224 -and $ISP.ens256){ 0.3 }else{0}
+    },
+    [pscustomobject]@{
+        "Name" = "WEB-L: Basic configuration"; "Max" = 0.3; "Mark" = if($WEBL.hostname -and $WEBL.ens192){ 0.3 }else{0}
+    },
+    [pscustomobject]@{
+        "Name" = "WEB-R: Basic configuration"; "Max" = 0.3; "Mark" = if($WEBR.hostname -and $WEBR.ens192){ 0.3 }else{0}
+    }
+)
+$result | Format-Table
 
 Disconnect-VIServer -Server $vcsa -Confirm:$false
