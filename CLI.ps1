@@ -37,9 +37,9 @@ $dns_table = @{
 $answers = $($dns_table.Keys).Length; $right_answers = $answers;
 
 $dns_table.Keys | ForEach-Object {
-  $expected_ip = $($dns_table[$_] | sort)
+  $expected_ip = $($dns_table[$_] | Sort-Object)
   try {
-   $answer = $($(Resolve-DnsName -Name $_ -Server 3.3.3.1 -NoHostsFile -DnsOnly -QuickTimeout -ErrorAction Ignore).IPAddress | sort)
+   $answer = $($(Resolve-DnsName -Name $_ -Server 3.3.3.1 -NoHostsFile -DnsOnly -QuickTimeout -ErrorAction Ignore).IPAddress | Sort-Object)
    $result = Compare-Object $expected_ip $answer;
    if($result){
     $right_answers -= 1
