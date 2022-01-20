@@ -30,7 +30,7 @@ function payload {
         'PLAY=$(mktemp)'
         'echo {0} | base64 -d | zcat > $PLAY' -f $script
         'ANSIBLE_STDOUT_CALLBACK=json ansible-playbook --check -i localhost, -c local $PLAY | jq ''[.plays[].tasks[1:][]|{(.task.name):.hosts.localhost.changed|not}]|add'''
-        'rm -f $PLAY'
+        '#rm -f $PLAY'
       ) -join ';'
     }
     if($Win){
@@ -58,6 +58,13 @@ $out.ScriptOutput | ConvertFrom-Json
 
 ##################
 
+$SRV = Get-VM -Name "TF-SRV-0"
+$vmscript = Get-Content -Path .\SRV.ps1 -Raw | compress | payload -Win
+$out = Invoke-VMScript -VM $SRV -ScriptText $vmscript -GuestUser 'Administrator' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell
+$out.ScriptOutput | ConvertFrom-Json
+
+##################
+
 $ISP = Get-VM -Name "TF-ISP-0"
 $vmscript = Get-Content -Path .\ISP.yaml -Raw | compress | payload -Linux
 $out = Invoke-VMScript -VM $ISP -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash
@@ -68,6 +75,13 @@ $out.ScriptOutput | ConvertFrom-Json
 $WEBL = Get-VM -Name "TF-WEB-L-0"
 $vmscript = Get-Content -Path .\WEBL.yaml -Raw | compress | payload -Linux
 $out = Invoke-VMScript -VM $WEBL -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash
+$out.ScriptOutput | ConvertFrom-Json
+
+###################
+
+$WEBR = Get-VM -Name "TF-WEB-R-0"
+$vmscript = Get-Content -Path .\WEBR.yaml -Raw | compress | payload -Linux
+$out = Invoke-VMScript -VM $WEBR -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash
 $out.ScriptOutput | ConvertFrom-Json
 
 Disconnect-VIServer -Server $vcsa -Confirm:$false
