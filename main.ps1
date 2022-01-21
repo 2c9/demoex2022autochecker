@@ -165,49 +165,55 @@ function Get-Marks {
 $vcsa = "vcsacluster.ouiit.local"
 Connect-VIServer -Server $vcsa
 
-$tasks=@()
+$count = 0
+while ($count -lt 3) {
+    $student = (Get-ResourcePool -Name "TF_DEMO2022-C$($count.ToString())" | Get-VIPermission | Where-Object { $_.Role -eq 'DEMOEX2022' }).Principal.Split("\")[1]
 
-$CLI = Get-VM -Name "TF-CLI-0"
-$vmscript = Get-Content -Path .\CLI.ps1 -Raw | compress | payload -Win
-$tasks += Invoke-VMScript -VM $CLI -ScriptText $vmscript -GuestUser 'user' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell -RunAsync -Confirm:$false
+    $tasks=@()
 
-$SRV = Get-VM -Name "TF-SRV-0"
-$vmscript = Get-Content -Path .\SRV.ps1 -Raw | compress | payload -Win
-$tasks += Invoke-VMScript -VM $SRV -ScriptText $vmscript -GuestUser 'Administrator' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell -RunAsync -Confirm:$false
+    $CLI = Get-VM -Name "TF-CLI-$($count.ToString())"
+    $vmscript = Get-Content -Path .\CLI.ps1 -Raw | compress | payload -Win
+    $tasks += Invoke-VMScript -VM $CLI -ScriptText $vmscript -GuestUser 'user' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell -RunAsync -Confirm:$false
 
-$ISP = Get-VM -Name "TF-ISP-0"
-$vmscript = Get-Content -Path .\ISP.yaml -Raw | compress | payload -Linux
-$tasks += Invoke-VMScript -VM $ISP -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
+    $SRV = Get-VM -Name "TF-SRV-$($count.ToString())"
+    $vmscript = Get-Content -Path .\SRV.ps1 -Raw | compress | payload -Win
+    $tasks += Invoke-VMScript -VM $SRV -ScriptText $vmscript -GuestUser 'Administrator' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell -RunAsync -Confirm:$false
 
-$WEBL = Get-VM -Name "TF-WEB-L-0"
-$vmscript = Get-Content -Path .\WEBL.yaml -Raw | compress | payload -Linux
-$tasks += Invoke-VMScript -VM $WEBL -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
+    $ISP = Get-VM -Name "TF-ISP-$($count.ToString())"
+    $vmscript = Get-Content -Path .\ISP.yaml -Raw | compress | payload -Linux
+    $tasks += Invoke-VMScript -VM $ISP -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
 
-$WEBR = Get-VM -Name "TF-WEB-R-0"
-$vmscript = Get-Content -Path .\WEBR.yaml -Raw | compress | payload -Linux
-$tasks += Invoke-VMScript -VM $WEBR -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
+    $WEBL = Get-VM -Name "TF-WEB-L-$($count.ToString())"
+    $vmscript = Get-Content -Path .\WEBL.yaml -Raw | compress | payload -Linux
+    $tasks += Invoke-VMScript -VM $WEBL -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
 
-while ($tasks.State -contains 'running') { Start-Sleep 1 }
+    $WEBR = Get-VM -Name "TF-WEB-R-$($count.ToString())"
+    $vmscript = Get-Content -Path .\WEBR.yaml -Raw | compress | payload -Linux
+    $tasks += Invoke-VMScript -VM $WEBR -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
 
-$results = @{ "WEBR_OUT" = $null; "WEBL_OUT" = $null; "CLI_OUT" = $null; "SRV_OUT" = $null; "ISP_OUT" = $null }
-foreach ($task in $tasks) {
-    if($task.Result.VM.Name -like "*WEB-L*"){
-        $results.WEBL_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+    while ($tasks.State -contains 'running') { Start-Sleep 1 }
+
+    $results = @{ "WEBR_OUT" = $null; "WEBL_OUT" = $null; "CLI_OUT" = $null; "SRV_OUT" = $null; "ISP_OUT" = $null }
+    foreach ($task in $tasks) {
+        if($task.Result.VM.Name -like "*WEB-L*"){
+            $results.WEBL_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+        }
+        elseif ($task.Result.VM.Name -like "*WEB-R*") {
+            $results.WEBR_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+        }
+        elseif ($task.Result.VM.Name -like "*SRV*") {
+            $results.SRV_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+        }
+        elseif ($task.Result.VM.Name -like "*CLI*") {
+            $results.CLI_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+        }
+        elseif ($task.Result.VM.Name -like "*ISP*") {
+            $results.ISP_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+        }
     }
-    elseif ($task.Result.VM.Name -like "*WEB-R*") {
-        $results.WEBR_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
-    }
-    elseif ($task.Result.VM.Name -like "*SRV*") {
-        $results.SRV_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
-    }
-    elseif ($task.Result.VM.Name -like "*CLI*") {
-        $results.CLI_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
-    }
-    elseif ($task.Result.VM.Name -like "*ISP*") {
-        $results.ISP_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
-    }
+
+    Get-Marks -results $results | ConvertTo-Json | Out-File -FilePath "D:\Results\$($student).json"
+    $count += 1
 }
-
-Get-Marks -results $results | Format-Table
 
 Disconnect-VIServer -Server $vcsa -Confirm:$false
