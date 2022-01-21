@@ -48,149 +48,166 @@ function payload {
     return $vmscript
 }
 
+function Get-Marks {
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [Object]$results
+    )
+    $marks = @(
+        [pscustomobject]@{
+            "Name" = "A: Basic configuration"; "Max" = 0.3; "Mark" = if($results.CLI_OUT.hostname -and
+                                                                        $results.SRV_OUT.hostname -and
+                                                                        $results.ISP_OUT.hostname -and
+                                                                        $results.WEBL_OUT.hostname -and
+                                                                        $results.WEBR_OUT.hostname)
+                                                                        { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "A: Network configuration"; "Max" = 0.5; "Mark" = if( $results.CLI_OUT.netconf -and 
+                                                                           $results.SRV_OUT.netconf -and
+                                                                           $results.WEBR_OUT.ens192 -and
+                                                                           $results.WEBL_OUT.ens192 -and
+                                                                           ( $results.ISP_OUT.ens192 -and $results.ISP_OUT.ens224 -and $results.ISP_OUT.ens256) -and
+                                                                           ( $results.ISP_OUT.ip_forward -and $results.WEBL_OUT.gw -and $results.WEBR_OUT.gw ))
+                                                                           { 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "B: Only connected networks in the route table on ISP"; "Max" = 0.3; "Mark" = if ( $results.ISP_OUT.connected_only ){ 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "B: The Left and the Right offices have connectivity"; "Max" = 1; "Mark" = if(      $results.WEBL_OUT.tunnel -and
+                                                                                                         $results.WEBR_OUT.tunnel -and
+                                                                                                         $results.ISP_OUT.connected_only ) { 1 }
+                                                                                                elseif ( $results.WEBL_OUT.tunnel -and
+                                                                                                         $results.WEBR_OUT.tunnel        ) { 0.5 }
+                                                                                                else    { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "B: ICMP from WEB-L to RTR-R"; "Max" = 0.5; "Mark" = if( $results.WEBL_OUT.inet ){ 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "B: ICMP from WEB-R to RTR-L"; "Max" = 0.5; "Mark" = if( $results.WEBR_OUT.inet ){ 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "B: RTR-L has a forwarding rule for SSH from 2222 to WEB-L "; "Max" = 0.5; "Mark" = if ( $results.ISP_OUT.ssh_left ) { 0.5 } else { 0 };
+        },
+        [pscustomobject]@{
+            "Name" = "B: RTR-R has a forwarding rule for SSH from 2244 to WEB-R "; "Max" = 0.5; "Mark" = if ( $results.ISP_OUT.ssh_right ) { 0.5 } else { 0 };
+        },
+        [pscustomobject]@{
+            "Name" = "C: CLI has HTTP access to the application via RTR-L and RTR-R"; "Max" = 0.5; "Mark" = if ( $results.CLI_OUT.http ) { 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: CLI has HTTPS access to the application via RTR-L and RTR-R"; "Max" = 0.5; "Mark" = if ( $results.CLI_OUT.https ) { 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: HTTP redirects to HTTPS"; "Max" = 0.5; "Mark" = if ( $results.CLI_OUT.redirections ) { 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: ISP manges demo.wsr zone and CLI can resolve dns names"; "Max" = 1; "Mark" = if ( $results.CLI_OUT.dns ) { 1 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: SRV manges int.demo.wsr zone"; "Max" = 0.5; "Mark" = if ( $results.SRV_OUT.dnsrecord ) { 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: SRV has reverse zones"; "Max" = 0.5; "Mark" = if ( $results.SRV_OUT.dns_rzone_left -and -$results.SRV_OUT.dns_rzone_right ) { 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: WEB-L and WEB-R use SRV as DNS server"; "Max" = 0.5; "Mark" = if ( $results.WEBL_OUT.nameserver -and -$results.WEBR_OUT.nameserver ) { 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: Chrony is installed on ISP and the stratum=4"; "Max" = 0.5; "Mark" = if ( $results.ISP_OUT.chronyd_installed -and $results.ISP_OUT.chronyd_stratum ) { 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: CLI uses ISP as NTP server"; "Max" = 0.3; "Mark" = if ( $results.CLI_OUT.ntp ) { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: SRV uses ISP as NTP server"; "Max" = 0.3; "Mark" = if ( $results.SRV_OUT.ntp ) { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: SRV has RAID Mirror"; "Max" = 0.5; "Mark" = if ( $results.SRV_OUT.raid -and $results.SRV_OUT.drive_letter ) { 0.5 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: SRV has NFS share"; "Max" = 0.3; "Mark" = if ( $results.SRV_OUT.nfs_share ) { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: WEB-L and WEB-R connected to NFS"; "Max" = 0.3; "Mark" = if ( $results.SRV_OUT.nfs_clients ) { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: CA is configured"; "Max" = 1; "Mark" = if ( $results.SRV_OUT.ca ) { 1 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "C: CA certificate expiration"; "Max" = 1; "Mark" = if ( $results.SRV_OUT.ca_days ) { 1 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "D: Docker is installed on WEB-L"; "Max" = 0.3; "Mark" = if ( $results.WEBL_OUT.docker) { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "D: Docker is installed on WEB-R"; "Max" = 0.3; "Mark" = if ( $results.WEBR_OUT.docker) { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "D: The application image is loaded on WEB-L"; "Max" = 0.3; "Mark" = if ( $results.WEBL_OUT.docker_image) { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "D: The application image is loaded on WEB-R"; "Max" = 0.3; "Mark" = if ( $results.WEBR_OUT.docker_image) { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "D: The application container is running on WEB-L"; "Max" = 0.3; "Mark" = if ( $results.WEBL_OUT.docker_container) { 0.3 } else { 0 }
+        },
+        [pscustomobject]@{
+            "Name" = "D: The application container is running on WEB-R"; "Max" = 0.3; "Mark" = if ( $results.WEBR_OUT.docker_container) { 0.3 } else { 0 }
+        }
+    )
+    return $marks
+}
+
 $vcsa = "vcsacluster.ouiit.local"
 Connect-VIServer -Server $vcsa
 
+$tasks=@()
+
 $CLI = Get-VM -Name "TF-CLI-0"
 $vmscript = Get-Content -Path .\CLI.ps1 -Raw | compress | payload -Win
-$out = Invoke-VMScript -VM $CLI -ScriptText $vmscript -GuestUser 'user' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell
-$CLI_OUT = $out.ScriptOutput | ConvertFrom-Json
-
-##################
+$tasks += Invoke-VMScript -VM $CLI -ScriptText $vmscript -GuestUser 'user' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell -RunAsync -Confirm:$false
 
 $SRV = Get-VM -Name "TF-SRV-0"
 $vmscript = Get-Content -Path .\SRV.ps1 -Raw | compress | payload -Win
-$out = Invoke-VMScript -VM $SRV -ScriptText $vmscript -GuestUser 'Administrator' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell
-$SRV_OUT = $out.ScriptOutput | ConvertFrom-Json
-
-##################
+$tasks += Invoke-VMScript -VM $SRV -ScriptText $vmscript -GuestUser 'Administrator' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell -RunAsync -Confirm:$false
 
 $ISP = Get-VM -Name "TF-ISP-0"
 $vmscript = Get-Content -Path .\ISP.yaml -Raw | compress | payload -Linux
-$out = Invoke-VMScript -VM $ISP -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash
-$ISP_OUT = $out.ScriptOutput | ConvertFrom-Json
-
-###################
+$tasks += Invoke-VMScript -VM $ISP -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
 
 $WEBL = Get-VM -Name "TF-WEB-L-0"
 $vmscript = Get-Content -Path .\WEBL.yaml -Raw | compress | payload -Linux
-$out = Invoke-VMScript -VM $WEBL -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash
-$WEBL_OUT = $out.ScriptOutput | ConvertFrom-Json
-
-###################
+$tasks += Invoke-VMScript -VM $WEBL -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
 
 $WEBR = Get-VM -Name "TF-WEB-R-0"
 $vmscript = Get-Content -Path .\WEBR.yaml -Raw | compress | payload -Linux
-$out = Invoke-VMScript -VM $WEBR -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash
-$WEBR_OUT = $out.ScriptOutput | ConvertFrom-Json
+$tasks += Invoke-VMScript -VM $WEBR -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
 
-#####################################
+while ($tasks.State -contains 'running') { Start-Sleep 1 }
 
-$result = @(
-    [pscustomobject]@{
-        "Name" = "A: Basic configuration"; "Max" = 0.3; "Mark" = if($CLI_OUT.hostname -and
-                                                                    $SRV_OUT.hostname -and
-                                                                    $ISP_OUT.hostname -and
-                                                                    $WEBL_OUT.hostname -and
-                                                                    $WEBR_OUT.hostname)
-                                                                    { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "A: Network configuration"; "Max" = 0.5; "Mark" = if( $CLI_OUT.netconf -and 
-                                                                       $SRV_OUT.netconf -and
-                                                                       $WEBR_OUT.ens192 -and
-                                                                       $WEBL_OUT.ens192 -and
-                                                                       ( $ISP_OUT.ens192 -and $ISP_OUT.ens224 -and $ISP_OUT.ens256) -and
-                                                                       ( $ISP_OUT.ip_forward -and $WEBL_OUT.gw -and $WEBR_OUT.gw ))
-                                                                       { 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "B: Only connected networks in the route table on ISP"; "Max" = 0.3; "Mark" = if ( $ISP_OUT.connected_only ){ 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "B: The Left and the Right offices have connectivity"; "Max" = 1; "Mark" = if(      $WEBL_OUT.tunnel -and
-                                                                                                     $WEBR_OUT.tunnel -and
-                                                                                                     $ISP_OUT.connected_only ) { 1 }
-                                                                                            elseif ( $WEBL_OUT.tunnel -and
-                                                                                                     $WEBR_OUT.tunnel        ) { 0.5 }
-                                                                                            else    { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "B: ICMP from WEB-L to RTR-R"; "Max" = 0.5; "Mark" = if( $WEBL_OUT.inet ){ 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "B: ICMP from WEB-R to RTR-L"; "Max" = 0.5; "Mark" = if( $WEBR_OUT.inet ){ 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "B: RTR-L has a forwarding rule for SSH from 2222 to WEB-L "; "Max" = 0.5; "Mark" = if ( $ISP_OUT.ssh_left ) { 0.5 } else { 0 };
-    },
-    [pscustomobject]@{
-        "Name" = "B: RTR-R has a forwarding rule for SSH from 2244 to WEB-R "; "Max" = 0.5; "Mark" = if ( $ISP_OUT.ssh_right ) { 0.5 } else { 0 };
-    },
-    [pscustomobject]@{
-        "Name" = "C: CLI has HTTP access to the application via RTR-L and RTR-R"; "Max" = 0.5; "Mark" = if ( $CLI_OUT.http ) { 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: CLI has HTTPS access to the application via RTR-L and RTR-R"; "Max" = 0.5; "Mark" = if ( $CLI_OUT.https ) { 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: HTTP redirects to HTTPS"; "Max" = 0.5; "Mark" = if ( $CLI_OUT.redirections ) { 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: ISP manges demo.wsr zone and CLI can resolve dns names"; "Max" = 1; "Mark" = if ( $CLI_OUT.dns ) { 1 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: SRV manges int.demo.wsr zone"; "Max" = 0.5; "Mark" = if ( $SRV_OUT.dnsrecord ) { 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: SRV has reverse zones"; "Max" = 0.5; "Mark" = if ( $SRV_OUT.dns_rzone_left -and -$SRV_OUT.dns_rzone_right ) { 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: WEB-L and WEB-R use SRV as DNS server"; "Max" = 0.5; "Mark" = if ( $WEBL_OUT.nameserver -and -$WEBR_OUT.nameserver ) { 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: Chrony is installed on ISP and the stratum=4"; "Max" = 0.5; "Mark" = if ( $ISP_OUT.chronyd_installed -and $ISP_OUT.chronyd_stratum ) { 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: CLI uses ISP as NTP server"; "Max" = 0.3; "Mark" = if ( $CLI_OUT.ntp ) { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: SRV uses ISP as NTP server"; "Max" = 0.3; "Mark" = if ( $SRV_OUT.ntp ) { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: SRV has RAID Mirror"; "Max" = 0.5; "Mark" = if ( $SRV_OUT.raid -and $SRV_OUT.drive_letter ) { 0.5 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: SRV has NFS share"; "Max" = 0.3; "Mark" = if ( $SRV_OUT.nfs_share ) { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: WEB-L and WEB-R connected to NFS"; "Max" = 0.3; "Mark" = if ( $SRV_OUT.nfs_clients ) { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: CA is configured"; "Max" = 1; "Mark" = if ( $SRV_OUT.ca ) { 1 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "C: CA certificate expiration"; "Max" = 1; "Mark" = if ( $SRV_OUT.ca_days ) { 1 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "D: Docker is installed on WEB-L"; "Max" = 0.3; "Mark" = if ( $WEBL_OUT.docker) { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "D: Docker is installed on WEB-R"; "Max" = 0.3; "Mark" = if ( $WEBR_OUT.docker) { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "D: The application image is loaded on WEB-L"; "Max" = 0.3; "Mark" = if ( $WEBL_OUT.docker_image) { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "D: The application image is loaded on WEB-R"; "Max" = 0.3; "Mark" = if ( $WEBR_OUT.docker_image) { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "D: The application container is running on WEB-L"; "Max" = 0.3; "Mark" = if ( $WEBL_OUT.docker_container) { 0.3 } else { 0 }
-    },
-    [pscustomobject]@{
-        "Name" = "D: The application container is running on WEB-R"; "Max" = 0.3; "Mark" = if ( $WEBR_OUT.docker_container) { 0.3 } else { 0 }
+$results = @{ "WEBR_OUT" = $null; "WEBL_OUT" = $null; "CLI_OUT" = $null; "SRV_OUT" = $null; "ISP_OUT" = $null }
+foreach ($task in $tasks) {
+    if($task.Result.VM.Name -like "*WEB-L*"){
+        $results.WEBL_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
     }
-)
-$result | Format-Table
+    elseif ($task.Result.VM.Name -like "*WEB-R*") {
+        $results.WEBR_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+    }
+    elseif ($task.Result.VM.Name -like "*SRV*") {
+        $results.SRV_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+    }
+    elseif ($task.Result.VM.Name -like "*CLI*") {
+        $results.CLI_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+    }
+    elseif ($task.Result.VM.Name -like "*ISP*") {
+        $results.ISP_OUT = ( $task.Result.ScriptOutput.Split("`n") | ConvertFrom-Json )
+    }
+}
+
+Get-Marks -results $results | Format-Table
 
 Disconnect-VIServer -Server $vcsa -Confirm:$false
