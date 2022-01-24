@@ -167,7 +167,18 @@ Connect-VIServer -Server $vcsa
 
 $count = 0
 while ($count -lt 3) {
-    $student = (Get-ResourcePool -Name "TF_DEMO2022-C$($count.ToString())" | Get-VIPermission | Where-Object { $_.Role -eq 'DEMOEX2022' }).Principal.Split("\")[1]
+
+    $rp = Get-ResourcePool -Name "TF_DEMO2022-C$($count.ToString())"
+    $student = ($rp | Get-VIPermission | Where-Object { $_.Role -eq 'DEMOEX2022' }).Principal.Split("\")[1]
+
+    [System.Collections.Generic.List[System.Object]]$vms_not_started = Get-VM -Location $rp | Where-Object { $_.PowerState -ne "PoweredOn"} | Start-VM
+    while($vms_not_started.Length -gt 0){
+        # Get stopped VMs
+        $vms_not_started = $vms_not_started | Where-Object { $_.extensionData.Guest.ToolsStatus -ne "toolsOK" }
+        Start-Sleep 1
+        # Refresh vmware tools status
+        $vms_not_started = $vms_not_started | ForEach-Object { Get-VM -Name $_.Name }
+    }
 
     $tasks=@()
 
