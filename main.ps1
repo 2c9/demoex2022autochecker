@@ -30,7 +30,7 @@ function payload {
         'PLAY=$(mktemp)'
         'echo {0} | base64 -d | zcat > $PLAY' -f $script
         'ANSIBLE_STDOUT_CALLBACK=json ansible-playbook --check -i localhost, -c local $PLAY | jq ''[.plays[].tasks[1:][]|{(.task.name):.hosts.localhost.changed|not}]|add'''
-        '#rm -f $PLAY'
+        'rm -f $PLAY'
       ) -join ';'
     }
     if($Win){
