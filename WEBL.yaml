@@ -60,7 +60,7 @@
         state: present
     
     - name: docker_container
-      shell: 'docker ps -a -q --filter ancestor="app:latest" | wc -l 2>/dev/null'
+      shell: 'docker ps -a -q --filter ancestor="app:latest" 2>/dev/null | wc -l'
       check_mode: no
       register: status
-      changed_when: status.stdout != "1"
+      changed_when: status.stdout > 0

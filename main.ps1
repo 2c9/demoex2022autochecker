@@ -162,11 +162,12 @@ function Get-Marks {
     return $marks
 }
 
+Set-PowerCLIConfiguration -InvalidCertificateAction Ignore -Confirm:$false | Out-Null
 $vcsa = "vcsacluster.ouiit.local"
 Connect-VIServer -Server $vcsa
 
 $count = 0
-while ($count -le 1) {
+while ($count -le 3) {
 
     $rp = Get-ResourcePool -Name "TF_DEMO2022-C$($count.ToString())"
     $student = ($rp | Get-VIPermission | Where-Object { $_.Role -eq 'DEMOEX2022' }).Principal.Split("\")[1]
@@ -225,7 +226,7 @@ while ($count -le 1) {
         }
     }
 
-    Get-Marks -results $results | ConvertTo-Json | Out-File -FilePath "D:\Results\$($student).json"
+    Get-Marks -results $results | ConvertTo-Json | Out-File -FilePath "\mnt\d\Results\$($student).json"
     $count += 1
 }
 
