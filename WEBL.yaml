@@ -58,6 +58,7 @@
         tag: 'latest'
         source: local
         state: present
+      changed_when: status.failed or status.changed
     
     - name: docker_container
       shell: 'docker ps -a -q --filter ancestor="app:latest" 2>/dev/null | wc -l'

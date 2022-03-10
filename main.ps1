@@ -30,7 +30,7 @@ function payload {
         'PLAY=$(mktemp)'
         'echo {0} | base64 -d | zcat > $PLAY' -f $script
         'ANSIBLE_STDOUT_CALLBACK=json ansible-playbook --check -i localhost, -c local $PLAY | jq ''[.plays[].tasks[1:][]|{(.task.name):.hosts.localhost.changed|not}]|add'''
-        'rm -f $PLAY'
+        #'rm -f $PLAY'
       ) -join ';'
     }
     if($Win){
@@ -73,7 +73,11 @@ function Get-Marks {
                                                                            { 0.5 } else { 0 }
         },
         [pscustomobject]@{
-            "Name" = "B: Only connected networks in the route table on ISP"; "Max" = 0.3; "Mark" = if ( $results.ISP_OUT.connected_only ){ 0.3 } else { 0 }
+            "Name" = "B: Only connected networks in the route table on ISP"; "Max" = 0.3; "Mark" = if ( $results.ISP_OUT.ens192 -and
+                                                                                                        $results.ISP_OUT.ens224 -and
+                                                                                                        $results.ISP_OUT.ens256 -and
+                                                                                                        $results.ISP_OUT.connected_only
+                                                                                                      ){ 0.3 } else { 0 }
         },
         [pscustomobject]@{
             "Name" = "B: The Left and the Right offices have connectivity"; "Max" = 1; "Mark" = if(      $results.WEBL_OUT.tunnel -and
@@ -166,47 +170,64 @@ Set-PowerCLIConfiguration -InvalidCertificateAction Ignore -Confirm:$false | Out
 $vcsa = "vcsacluster.ouiit.local"
 Connect-VIServer -Server $vcsa
 
+$vms_not_started = Get-VM -Location "CR_DEMO2022-C*" | Where-Object { $_.PowerState -ne "PoweredOn"}
+if($vms_not_started.Length -gt 0){
+    $vms_not_started | Start-VM -Confirm:$false -RunAsync:$true
+}
+
 $count = 0
-while ($count -le 3) {
+while ($count -le 24) {
 
-    $rp = Get-ResourcePool -Name "TF_DEMO2022-C$($count.ToString())"
+    $rp = Get-ResourcePool -Name "CR_DEMO2022-C$($count.ToString())"
     $student = ($rp | Get-VIPermission | Where-Object { $_.Role -eq 'DEMOEX2022' }).Principal.Split("\")[1]
+    Write-Host "Checking $($rp.Name)... Student: $($student)"
 
-    [System.Collections.Generic.List[System.Object]]$vms_not_started = Get-VM -Location $rp | Where-Object { $_.PowerState -ne "PoweredOn"} | Start-VM
-    $timeout = 60 # I think it's dead
+    # If VMWare tools are unavailable then restart VMs and wait for them
+    $vms_not_started = Get-VM -Location $rp | Where-Object { $_.extensionData.Guest.ToolsStatus -ne "toolsOK" }
+    if($vms_not_started.Length -gt 0){
+        Write-Host "These VMs are inaccessible: $($vms_not_started.Name -join ', ')"
+        #Write-Host "Trying to restart..."
+        #$vms_not_started | Restart-VM -Confirm:$false -RunAsync:$true | Out-Null
+    }
+
+    [int]$timeout = 60 # I think it's dead
     while(($vms_not_started.Length -gt 0) -and ($timeout -gt 0)){
-        # Get stopped VMs
-        $vms_not_started = $vms_not_started | Where-Object { $_.extensionData.Guest.ToolsStatus -ne "toolsOK" }
+        # Updates info about VMs
+        $vms_not_started = Get-VM -Location $rp | Where-Object { $_.extensionData.Guest.ToolsStatus -ne "toolsOK" }
         Start-Sleep 1
-        # Refresh vmware tools status
-        $vms_not_started = $vms_not_started | ForEach-Object { Get-VM -Name $_.Name }
         $timeout -= 1
     }
 
     $tasks=@()
 
-    $CLI = Get-VM -Name "TF-CLI-$($count.ToString())"
+    $suffix = $($count.ToString())
+
+    if($suffix -eq 17) {
+        $suffix = 1
+    }
+
+    $CLI = Get-VM -Name "*CLI-$($suffix)" -Location $rp
     $vmscript = Get-Content -Path .\CLI.ps1 -Raw | compress | payload -Win
     $tasks += Invoke-VMScript -VM $CLI -ScriptText $vmscript -GuestUser 'user' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell -RunAsync -Confirm:$false
 
-    $SRV = Get-VM -Name "TF-SRV-$($count.ToString())"
+    $SRV = Get-VM -Name "*SRV-$($suffix)" -Location $rp
     $vmscript = Get-Content -Path .\SRV.ps1 -Raw | compress | payload -Win
     $tasks += Invoke-VMScript -VM $SRV -ScriptText $vmscript -GuestUser 'Administrator' -GuestPassword 'Pa$$w0rd' -ScriptType Powershell -RunAsync -Confirm:$false
 
-    $ISP = Get-VM -Name "TF-ISP-$($count.ToString())"
+    $ISP = Get-VM -Name "*ISP-$($suffix)" -Location $rp
     $vmscript = Get-Content -Path .\ISP.yaml -Raw | compress | payload -Linux
     $tasks += Invoke-VMScript -VM $ISP -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
 
-    $WEBL = Get-VM -Name "TF-WEB-L-$($count.ToString())"
+    $WEBL = Get-VM -Name "*WEB-L-$($suffix)" -Location $rp
     $vmscript = Get-Content -Path .\WEBL.yaml -Raw | compress | payload -Linux
     $tasks += Invoke-VMScript -VM $WEBL -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
 
-    $WEBR = Get-VM -Name "TF-WEB-R-$($count.ToString())"
+    $WEBR = Get-VM -Name "*WEB-R-$($suffix)" -Location $rp
     $vmscript = Get-Content -Path .\WEBR.yaml -Raw | compress | payload -Linux
     $tasks += Invoke-VMScript -VM $WEBR -ScriptText $vmscript -GuestUser 'root' -GuestPassword 'toor' -ScriptType Bash -RunAsync -Confirm:$false
 
     while ($tasks.State -contains 'running') { Start-Sleep 1 }
-
+    Write-Host 'Check Results'
     $results = @{ "WEBR_OUT" = $null; "WEBL_OUT" = $null; "CLI_OUT" = $null; "SRV_OUT" = $null; "ISP_OUT" = $null }
     foreach ($task in $tasks) {
         if($task.Result.VM.Name -like "*WEB-L*"){
